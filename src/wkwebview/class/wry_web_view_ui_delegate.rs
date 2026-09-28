@@ -67,6 +67,19 @@ define_class!(
       on_close();
     }
   }
+
+  // Also the popup webview's UI delegate: WebKit reports `window.close()` here and leaves
+  // the window on screen unless the host closes it.
+  unsafe impl WKUIDelegate for WryNSWindowDelegate {
+    #[unsafe(method(webViewDidClose:))]
+    unsafe fn web_view_did_close(&self, webview: &objc2_web_kit::WKWebView) {
+      // Closing the window drops this delegate (see `on_close`); keep it alive until we return.
+      let _this = objc2::Message::retain(self);
+      if let Some(window) = webview.window() {
+        window.close();
+      }
+    }
+  }
 );
 
 #[cfg(target_os = "macos")]
@@ -239,6 +252,7 @@ define_class!(
               }),
             );
             window.setDelegate(Some(objc2::runtime::ProtocolObject::from_ref(&*delegate)));
+            webview.setUIDelegate(Some(objc2::runtime::ProtocolObject::from_ref(&*delegate)));
 
             window.setContentView(Some(&webview));
             window.makeKeyAndOrderFront(None);
